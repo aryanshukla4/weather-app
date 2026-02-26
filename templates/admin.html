@@ -23,6 +23,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Replace href later with your own favicon URL/file -->
+  <link rel="icon" type="image/png" href="/static/favicon.png" />
   <title>Nimbus — Visitor Analytics</title>
   <style>
     /* ── Reset ──────────────────────────────────────────────── */
@@ -253,7 +255,7 @@
 
   {# ── Recent Visitors Table ────────────────────────────────── #}
   <div class="section">
-    <h2>Recent Visitors (last 20)</h2>
+    <h2>Recent Visitors (last 100)</h2>
 
     {% if stats.recent %}
       <div class="table-wrapper">
@@ -263,6 +265,7 @@
               <th>Time (IST)</th>
               <th>IP Address</th>
               <th>Location (from IP)</th>
+              <th>State</th>
               <th>Browser</th>
               <th>OS</th>
               <th>Device</th>
@@ -293,6 +296,8 @@
                     -
                   {% endif %}
                 </td>
+
+                <td>{{ r.ip_region or "-" }}</td>
 
                 {# Browser name #}
                 <td>{{ r.browser_name or "-" }}</td>
@@ -358,3 +363,5 @@
 
 </body>
 </html>
+
+

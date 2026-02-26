@@ -16,6 +16,7 @@ except Exception:  # pragma: no cover
 
 
 SQLITE_DB_PATH = Path(os.getenv("VISITORS_DB_PATH", "visitors.db"))
+_coords_lookup_cache: dict[tuple[float, float], dict[str, Any]] = {}
 
 
 def _database_url() -> str:
@@ -196,6 +197,80 @@ def get_ip_info(ip: str) -> dict[str, Any]:
     return {}
 
 
+def get_geo_from_coords(lat: Any, lon: Any) -> dict[str, Any]:
+    """
+    Reverse geocode GPS coordinates to city/state/country.
+    Returns keys aligned with visitor storage fields.
+    """
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except (TypeError, ValueError):
+        return {}
+
+    cache_key = (round(lat_f, 3), round(lon_f, 3))
+    if cache_key in _coords_lookup_cache:
+        return dict(_coords_lookup_cache[cache_key])
+
+    import requests as req
+
+    result: dict[str, Any] = {}
+
+    # First try OpenWeather reverse geocoding (uses existing API key).
+    api_key = (os.getenv("OPENWEATHER_API_KEY") or "").strip()
+    if api_key:
+        try:
+            response = req.get(
+                "https://api.openweathermap.org/geo/1.0/reverse",
+                params={"lat": lat_f, "lon": lon_f, "limit": 1, "appid": api_key},
+                timeout=3,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if isinstance(data, list) and data:
+                item = data[0]
+                result = {
+                    "ip_city": item.get("name", "") or "",
+                    "ip_region": item.get("state", "") or "",
+                    # OpenWeather returns 2-letter country code here.
+                    "ip_country": item.get("country", "") or "",
+                    "ip_country_code": item.get("country", "") or "",
+                }
+        except Exception as e:
+            logging.debug("OpenWeather reverse geocode failed: %s", e)
+
+    # Fallback: Nominatim for richer country/state names when needed.
+    if not result.get("ip_city") or not result.get("ip_region"):
+        try:
+            response = req.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={"format": "jsonv2", "lat": lat_f, "lon": lon_f, "zoom": 10},
+                headers={"User-Agent": "NimbusWeatherApp/1.0"},
+                timeout=3,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            addr = payload.get("address", {}) if isinstance(payload, dict) else {}
+            city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("hamlet") or ""
+            state = addr.get("state") or addr.get("region") or ""
+            country = addr.get("country") or ""
+            country_code = (addr.get("country_code") or "").upper()
+            if city and not result.get("ip_city"):
+                result["ip_city"] = city
+            if state and not result.get("ip_region"):
+                result["ip_region"] = state
+            if country and not result.get("ip_country"):
+                result["ip_country"] = country
+            if country_code and not result.get("ip_country_code"):
+                result["ip_country_code"] = country_code
+        except Exception as e:
+            logging.debug("Nominatim reverse geocode failed: %s", e)
+
+    if result:
+        _coords_lookup_cache[cache_key] = dict(result)
+    return result
+
+
 def parse_user_agent(ua: str) -> dict[str, str]:
     if not ua:
         return {"browser_name": "Unknown", "os_name": "Unknown", "device_type": "unknown"}
@@ -268,6 +343,11 @@ def _dict_rows(rows: list[Any]) -> list[dict[str, Any]]:
 
 def save_visitor(data: dict, ip: str) -> int:
     ip_info = get_ip_info(ip)
+    if data.get("location_granted") and data.get("lat") is not None and data.get("lon") is not None:
+        gps_info = get_geo_from_coords(data.get("lat"), data.get("lon"))
+        if gps_info:
+            ip_info.update({k: v for k, v in gps_info.items() if v})
+
     ua_info = parse_user_agent(data.get("user_agent", ""))
     now = datetime.now(timezone.utc).isoformat()
 
@@ -472,12 +552,12 @@ def get_visitor_stats() -> dict[str, Any]:
 
             cur.execute(
                 """
-                SELECT visit_time, ip_address, ip_city, ip_country,
-                       browser_name, device_type, location_granted, lat, lon,
+                SELECT visit_time, ip_address, ip_city, ip_region, ip_country,
+                       browser_name, os_name, device_type, location_granted, lat, lon,
                        timezone, screen_width, screen_height
                 FROM visitors
                 ORDER BY id DESC
-                LIMIT 20
+                LIMIT 100
                 """
             )
             recent = cur.fetchall()
@@ -530,12 +610,12 @@ def get_visitor_stats() -> dict[str, Any]:
             ).fetchone()[0]
             recent = conn.execute(
                 """
-                SELECT visit_time, ip_address, ip_city, ip_country,
-                       browser_name, device_type, location_granted, lat, lon,
+                SELECT visit_time, ip_address, ip_city, ip_region, ip_country,
+                       browser_name, os_name, device_type, location_granted, lat, lon,
                        timezone, screen_width, screen_height
                 FROM visitors
                 ORDER BY id DESC
-                LIMIT 20
+                LIMIT 100
                 """
             ).fetchall()
 
