@@ -1,0 +1,39 @@
+# requirements.txt
+# ─────────────────────────────────────────────────────────────
+# Install everything:
+#   pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────
+
+# ── Core Framework ────────────────────────────────────────────
+flask==3.0.3
+# Flask — the web framework.
+
+requests==2.32.3
+# requests — HTTP calls to OpenWeatherMap.
+
+python-dotenv==1.0.1
+# python-dotenv — reads .env so secrets stay out of code.
+
+gunicorn==22.0.0
+# gunicorn — production web server. Never use Flask dev server live.
+
+# ── Security Packages ─────────────────────────────────────────
+flask-limiter==3.8.0
+# Rate limiting — limits requests per IP per time window.
+# Prevents API scraping, abuse, and DoS floods.
+
+# ─────────────────────────────────────────────────────────────
+# FUTURE FEATURES — uncomment when ready:
+# ─────────────────────────────────────────────────────────────
+
+# redis==5.0.4
+# Persistent rate limit storage + caching layer.
+
+# flask-caching==2.3.0
+# Cache weather responses to avoid hitting OpenWeatherMap every call.
+
+# flask-cors==4.0.0
+# CORS headers — needed for a separate mobile/React app.
+
+# celery==5.4.0
+# Background tasks (weather alert emails, scheduled forecasts).

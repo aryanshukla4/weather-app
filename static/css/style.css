@@ -1,0 +1,683 @@
+/* ============================================================
+   static/css/style.css
+   Atmospheric dark sky theme with glassmorphism cards.
+   Design principles: depth, motion, editorial typography.
+   ============================================================ */
+
+
+/* ── CSS Custom Properties (Variables) ───────────────────────
+   Define all colors/values in one place. Changing --accent
+   here updates it everywhere instantly. Great for theming.
+   ─────────────────────────────────────────────────────────── */
+:root {
+  /* Colors */
+  --bg-deep:       #080d1a;          /* deepest background */
+  --bg-mid:        #0d1628;
+  --glass-bg:      rgba(255,255,255,0.06);    /* card background */
+  --glass-border:  rgba(255,255,255,0.12);    /* card border */
+  --glass-hover:   rgba(255,255,255,0.10);
+
+  --text-primary:  #f0f4ff;          /* main white text */
+  --text-secondary:#8ca0c8;          /* muted label text */
+  --text-muted:    #4a5a80;
+
+  --accent:        #4fd1c5;          /* teal accent */
+  --accent-warm:   #f6a623;          /* golden accent */
+  --accent-glow:   rgba(79,209,197,0.3);
+
+  --error:         #ff6b6b;
+
+  /* Typography */
+  --font-display: 'Syne', sans-serif;
+  --font-body:    'DM Sans', sans-serif;
+
+  /* Spacing */
+  --radius-lg:    20px;
+  --radius-md:    14px;
+  --radius-sm:    8px;
+
+  /* Transitions */
+  --transition:   0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  /* overflow-x: hidden prevents horizontal scrollbars from animations */
+  line-height: 1.6;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   ANIMATED BACKGROUND
+   Three stacked gradient layers that slowly animate —
+   creates the feel of shifting clouds in a night sky.
+══════════════════════════════════════════════════════════ */
+.sky-bg {
+  position: fixed;           /* stays in place even when scrolling */
+  inset: 0;                  /* shorthand for top/right/bottom/left: 0 */
+  z-index: -1;               /* behind everything else */
+  overflow: hidden;
+}
+
+.sky-layer {
+  position: absolute;
+  inset: -50%;               /* oversized so the animation stays smooth */
+  border-radius: 50%;        /* makes them oval blobs */
+  opacity: 0.7;
+  animation: skyDrift 20s ease-in-out infinite alternate;
+  /* alternate: plays forward, then backward, forever */
+}
+
+.layer-1 {
+  background: radial-gradient(ellipse at 30% 40%, #1a2a6c 0%, transparent 60%);
+  animation-duration: 22s;
+}
+.layer-2 {
+  background: radial-gradient(ellipse at 70% 60%, #0d3b5e 0%, transparent 55%);
+  animation-duration: 28s;
+  animation-delay: -8s;      /* starts mid-cycle so layers don't sync */
+}
+.layer-3 {
+  background: radial-gradient(ellipse at 50% 80%, #162040 0%, transparent 50%);
+  animation-duration: 18s;
+  animation-delay: -14s;
+}
+
+@keyframes skyDrift {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(3%, -4%) scale(1.05); }
+  100% { transform: translate(-3%, 3%) scale(0.97); }
+}
+
+/* Glowing orbs for extra depth */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);         /* heavy blur = soft glow, not sharp circle */
+  opacity: 0.15;
+  animation: orbFloat 30s ease-in-out infinite alternate;
+}
+.orb-1 { width: 400px; height: 400px; background: #4fd1c5; top: -100px; left: -100px; }
+.orb-2 { width: 300px; height: 300px; background: #4a90e2; bottom: -50px; right: -50px; animation-delay: -15s; }
+.orb-3 { width: 200px; height: 200px; background: #f6a623; top: 50%; left: 60%; animation-delay: -7s; opacity: 0.08; }
+
+@keyframes orbFloat {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(40px, -40px); }
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   LAYOUT
+══════════════════════════════════════════════════════════ */
+.app-container {
+  max-width: 720px;          /* keeps content readable on wide screens */
+  margin: 0 auto;            /* horizontally centered */
+  padding: 40px 20px 60px;
+  position: relative;
+  z-index: 1;
+}
+
+
+/* ── Header ───────────────────────────────────────────────── */
+.app-header {
+  text-align: center;
+  margin-bottom: 40px;
+  animation: fadeDown 0.8s ease both;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.logo-icon {
+  font-size: 1.8rem;
+  color: var(--accent);
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+  animation: pulse 3s ease infinite;
+}
+
+.logo-text {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 2rem;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+}
+
+.tagline {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-weight: 300;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 8px var(--accent-glow)); }
+  50%       { opacity: 0.7; filter: drop-shadow(0 0 16px var(--accent-glow)); }
+}
+
+
+/* ── Search Section ───────────────────────────────────────── */
+.search-section {
+  margin-bottom: 32px;
+  animation: fadeDown 0.8s 0.1s ease both;
+  /* 0.1s delay = staggered entrance after header */
+}
+
+.search-wrapper {
+  display: flex;
+  gap: 0;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 50px;       /* pill shape */
+  backdrop-filter: blur(20px);
+  /* backdrop-filter: blur creates the frosted glass effect */
+  overflow: hidden;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.search-wrapper:focus-within {
+  /* :focus-within activates when any child (input) is focused */
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.search-input {
+  flex: 1;                   /* takes up all available space in the row */
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 16px 24px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-btn {
+  background: var(--accent);
+  border: none;
+  padding: 0 24px;
+  cursor: pointer;
+  color: #0a1628;
+  transition: background var(--transition);
+  display: flex;
+  align-items: center;
+}
+
+.search-btn:hover {
+  background: #81e6df;       /* lighter teal on hover */
+}
+
+.location-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  margin: 12px auto 0;
+  transition: all var(--transition);
+  display: block;            /* center it with margin: auto */
+}
+
+.location-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+
+/* ── Glass Card Base ──────────────────────────────────────── */
+.card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(20px);
+  padding: 24px;
+  transition: all var(--transition);
+}
+
+.card:hover {
+  background: var(--glass-hover);
+  border-color: rgba(255,255,255,0.18);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+
+/* ── Hero Card (current weather) ─────────────────────────── */
+.hero-card {
+  margin-bottom: 16px;
+  animation: fadeUp 0.6s 0.2s ease both;
+}
+
+.hero-location {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.city-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2rem;
+  color: var(--text-primary);
+}
+
+.country-badge {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.hero-temp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.hero-temp-block {
+  display: flex;
+  align-items: flex-start;
+  line-height: 1;
+}
+
+.hero-temp {
+  font-family: var(--font-display);
+  font-size: 5.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -3px;
+  /* Big bold number — the focal point of the entire card */
+}
+
+.temp-unit {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin-top: 12px;
+}
+
+.hero-icon-block {
+  text-align: right;
+}
+
+.weather-icon {
+  width: 100px;
+  height: 100px;
+  filter: drop-shadow(0 0 20px rgba(255,255,255,0.2));
+  /* OpenWeatherMap icons are a bit small/plain, the glow elevates them */
+}
+
+.weather-desc {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+  /* capitalize makes "light rain" → "Light Rain" */
+}
+
+.hero-sub-row {
+  display: flex;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.sub-divider {
+  opacity: 0.4;
+}
+
+
+/* ── Stats Grid (4 cards) ─────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  /* Creates a 2-column grid. On desktop, 2 cards per row. */
+  gap: 16px;
+  margin-bottom: 16px;
+  animation: fadeUp 0.6s 0.3s ease both;
+}
+
+@media (min-width: 500px) {
+  .stats-grid { grid-template-columns: repeat(4, 1fr); }
+  /* On wider screens, all 4 cards in one row */
+}
+
+.stat-card {
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.stat-icon {
+  font-size: 1.6rem;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--text-primary);
+}
+
+.stat-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Humidity progress bar */
+.stat-bar-bg {
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.stat-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #81e6df);
+  border-radius: 2px;
+  transition: width 1s ease;
+  /* Animates from 0 to the actual humidity value on load */
+  width: 0%;
+}
+
+
+/* ── Sunrise/Sunset card ──────────────────────────────────── */
+.sun-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  animation: fadeUp 0.6s 0.4s ease both;
+  gap: 16px;
+}
+
+.sun-item {
+  text-align: center;
+  min-width: 80px;
+}
+
+.sun-item-right {
+  text-align: center;
+}
+
+.sun-icon {
+  font-size: 1.8rem;
+  margin-bottom: 4px;
+}
+
+.sun-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sun-time {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--accent-warm);
+  margin-top: 4px;
+}
+
+.sun-divider {
+  flex: 1;
+}
+
+.sun-arc-svg {
+  width: 100%;
+  height: auto;
+}
+
+
+/* ── 5-Day Forecast ───────────────────────────────────────── */
+.forecast-card {
+  animation: fadeUp 0.6s 0.5s ease both;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .forecast-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.forecast-item {
+  text-align: center;
+  padding: 12px 8px;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: all var(--transition);
+}
+
+.forecast-item:hover {
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-3px);
+}
+
+.forecast-day {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.forecast-icon {
+  width: 44px;
+  height: 44px;
+}
+
+.forecast-temp-max {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.forecast-temp-min {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+
+/* ── Error Message ────────────────────────────────────────── */
+.error-msg {
+  background: rgba(255,107,107,0.12);
+  border: 1px solid rgba(255,107,107,0.3);
+  border-radius: var(--radius-md);
+  padding: 14px 20px;
+  color: var(--error);
+  font-size: 0.9rem;
+  text-align: center;
+  margin-bottom: 20px;
+  animation: fadeDown 0.3s ease;
+}
+
+
+/* ── Loading Spinner ──────────────────────────────────────── */
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.spinner-ring {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255,255,255,0.1);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* ── Empty State ──────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+  animation: fadeUp 0.8s 0.2s ease both;
+}
+
+.empty-globe {
+  font-size: 5rem;
+  margin-bottom: 16px;
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-12px); }
+}
+
+.empty-state p {
+  font-size: 1rem;
+  margin-bottom: 24px;
+}
+
+.example-cities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.city-chip {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  padding: 8px 18px;
+  border-radius: 50px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.city-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(79,209,197,0.08);
+}
+
+
+/* ── Footer ───────────────────────────────────────────────── */
+.app-footer {
+  text-align: center;
+  margin-top: 40px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.app-footer a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  color: var(--accent);
+}
+
+
+/* ── Utility: Hidden ──────────────────────────────────────── */
+.hidden {
+  display: none !important;
+  /* !important ensures hidden always wins over other display values */
+}
+
+
+/* ── Entrance Animations ──────────────────────────────────── */
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ── Responsive (Mobile) ─────────────────────────────────── */
+@media (max-width: 400px) {
+  .hero-temp { font-size: 4rem; }
+  .city-name  { font-size: 1.5rem; }
+  .weather-icon { width: 70px; height: 70px; }
+  .sun-card   { flex-direction: column; }
+}

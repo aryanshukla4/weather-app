@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<!--
+  templates/index.html
+  ════════════════════════════════════════════════════════════
+  Flask serves this file when someone visits your website.
+  It's in the /templates folder because Flask's render_template()
+  automatically looks there.
+
+  Design aesthetic: Dark atmospheric sky theme with glassmorphism
+  cards, smooth animations, and a premium editorial feel.
+  ════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- UTF-8 supports all characters including weather symbols, emoji, etc. -->
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Makes the app responsive on mobile phones -->
+
+  <title>Nimbus — Weather</title>
+
+  <!-- Google Fonts: Syne (display) + DM Sans (body) — distinctive pairing -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet" />
+
+  <!-- Our custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+
+<body>
+
+  <!-- ══════════════════════════════════════════════════════
+       ANIMATED BACKGROUND — Layered gradient sky
+  ══════════════════════════════════════════════════════ -->
+  <div class="sky-bg">
+    <div class="sky-layer layer-1"></div>
+    <div class="sky-layer layer-2"></div>
+    <div class="sky-layer layer-3"></div>
+    <!-- Floating orbs for depth -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       MAIN APP CONTAINER
+  ══════════════════════════════════════════════════════ -->
+  <div class="app-container">
+
+    <!-- ── Header ───────────────────────────────────────── -->
+    <header class="app-header">
+      <div class="logo">
+        <span class="logo-icon">◈</span>
+        <span class="logo-text">Nimbus</span>
+      </div>
+      <p class="tagline">Real-time weather, beautifully presented</p>
+    </header>
+
+    <!-- ── Search Bar ────────────────────────────────────── -->
+    <div class="search-section">
+      <div class="search-wrapper">
+        <input
+          type="text"
+          id="cityInput"
+          class="search-input"
+          placeholder="Search any city in the world..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <!-- autocomplete="off" prevents browser from showing old searches -->
+
+        <button id="searchBtn" class="search-btn" aria-label="Search">
+          <!-- SVG magnifying glass icon — inline SVG is crisp at any resolution -->
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- "Use My Location" button — triggers browser geolocation -->
+      <button id="locationBtn" class="location-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+          <circle cx="12" cy="12" r="10" stroke-dasharray="3 3"/>
+        </svg>
+        Use my location
+      </button>
+    </div>
+
+    <!-- ── Error Message ─────────────────────────────────── -->
+    <!-- Hidden by default. JavaScript shows it when there's an error. -->
+    <div id="errorMsg" class="error-msg hidden">
+      <span id="errorText">Something went wrong.</span>
+    </div>
+
+    <!-- ── Loading Spinner ───────────────────────────────── -->
+    <div id="loadingSpinner" class="loading-spinner hidden">
+      <div class="spinner-ring"></div>
+      <span>Fetching weather...</span>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════
+         WEATHER RESULTS — Hidden until data loads
+    ══════════════════════════════════════════════════ -->
+    <div id="weatherResults" class="weather-results hidden">
+
+      <!-- ── Hero Card: Current Weather ─────────────────── -->
+      <div class="card hero-card">
+
+        <!-- City name + country -->
+        <div class="hero-location">
+          <h1 id="cityName" class="city-name"></h1>
+          <span id="countryBadge" class="country-badge"></span>
+        </div>
+
+        <!-- Big temperature display -->
+        <div class="hero-temp-row">
+          <div class="hero-temp-block">
+            <span id="currentTemp" class="hero-temp"></span>
+            <span class="temp-unit">°C</span>
+          </div>
+
+          <!-- Weather icon from OpenWeatherMap -->
+          <div class="hero-icon-block">
+            <img id="weatherIcon" class="weather-icon" src="" alt="weather icon" />
+            <p id="weatherDesc" class="weather-desc"></p>
+          </div>
+        </div>
+
+        <!-- Feels like + high/low -->
+        <div class="hero-sub-row">
+          <span id="feelsLike" class="sub-stat"></span>
+          <span class="sub-divider">·</span>
+          <span id="tempRange" class="sub-stat"></span>
+        </div>
+      </div>
+
+      <!-- ── Stats Grid: 4 metric cards ─────────────────── -->
+      <div class="stats-grid">
+
+        <div class="card stat-card">
+          <div class="stat-icon">💧</div>
+          <div class="stat-label">Humidity</div>
+          <div id="humidity" class="stat-value"></div>
+          <div class="stat-bar-bg">
+            <div id="humidityBar" class="stat-bar"></div>
+          </div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-icon">💨</div>
+          <div class="stat-label">Wind Speed</div>
+          <div id="windSpeed" class="stat-value"></div>
+          <div id="windDir" class="stat-sub"></div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-icon">👁</div>
+          <div class="stat-label">Visibility</div>
+          <div id="visibility" class="stat-value"></div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-icon">🌡</div>
+          <div class="stat-label">Pressure</div>
+          <div id="pressure" class="stat-value"></div>
+        </div>
+
+      </div>
+
+      <!-- ── Sunrise / Sunset ───────────────────────────── -->
+      <div class="card sun-card">
+        <div class="sun-item">
+          <div class="sun-icon">🌅</div>
+          <div class="sun-label">Sunrise</div>
+          <div id="sunrise" class="sun-time"></div>
+        </div>
+        <div class="sun-divider">
+          <!-- SVG arc representing day arc -->
+          <svg viewBox="0 0 200 60" class="sun-arc-svg">
+            <path d="M 10 55 Q 100 5 190 55" fill="none" stroke="rgba(255,200,100,0.4)" stroke-width="2" stroke-dasharray="4 4"/>
+            <circle id="sunPosition" cx="100" cy="5" r="5" fill="#FFD700"/>
+          </svg>
+        </div>
+        <div class="sun-item sun-item-right">
+          <div class="sun-icon">🌇</div>
+          <div class="sun-label">Sunset</div>
+          <div id="sunset" class="sun-time"></div>
+        </div>
+      </div>
+
+      <!-- ── 5-Day Forecast ─────────────────────────────── -->
+      <div class="card forecast-card">
+        <h3 class="section-title">5-Day Forecast</h3>
+        <div id="forecastGrid" class="forecast-grid">
+          <!-- Forecast items injected here by JavaScript -->
+        </div>
+      </div>
+
+    </div>
+    <!-- end #weatherResults -->
+
+    <!-- ── Empty State (shown before first search) ───────── -->
+    <div id="emptyState" class="empty-state">
+      <div class="empty-globe">🌍</div>
+      <p>Search a city above to see live weather data</p>
+      <div class="example-cities">
+        <!-- Clicking these chips triggers a search automatically -->
+        <button class="city-chip" data-city="Mumbai">Mumbai</button>
+        <button class="city-chip" data-city="London">London</button>
+        <button class="city-chip" data-city="Tokyo">Tokyo</button>
+        <button class="city-chip" data-city="New York">New York</button>
+        <button class="city-chip" data-city="Sydney">Sydney</button>
+        <button class="city-chip" data-city="Dubai">Dubai</button>
+      </div>
+    </div>
+
+    <!-- ── Footer ────────────────────────────────────────── -->
+    <footer class="app-footer">
+      <span>Data from <a href="https://openweathermap.org" target="_blank" rel="noopener">OpenWeatherMap</a></span>
+      <span>·</span>
+      <span>Updates every 10 min</span>
+    </footer>
+
+  </div><!-- end .app-container -->
+
+  <!-- Our JavaScript — placed at bottom so HTML loads first -->
+  <script src="/static/js/app.js"></script>
+
+</body>
+</html>
