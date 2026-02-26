@@ -272,19 +272,23 @@ async function fetchWeatherByCoords(lat, lon) {
       return;
     }
 
-    // Step 2: now we have the city name, fetch forecast for it
-    const forecastData = await fetchJSON(`/api/forecast?city=${encodeURIComponent(weatherData.city)}`);
-    // encodeURIComponent handles city names with spaces like "New York"
-
     renderWeather(weatherData);
-    renderForecast(forecastData);
     showResults();
 
     cityInput.value = weatherData.city;
     // Fill in the search box so user sees what city was detected
 
+    // Step 2: now we have the city name, fetch forecast for it.
+    // If forecast fails for a rare city-name edge case, keep current weather visible.
+    try {
+      const forecastData = await fetchJSON(`/api/forecast?city=${encodeURIComponent(weatherData.city)}`);
+      renderForecast(forecastData);
+    } catch (forecastErr) {
+      console.warn("Forecast fetch failed for detected city:", forecastErr);
+    }
+
   } catch (err) {
-    showError("Failed to fetch weather for your location.");
+    showError(err.message || "Failed to fetch weather for your location.");
     console.error("Coords fetch error:", err);
   } finally {
     hideLoading();
@@ -295,7 +299,16 @@ async function fetchWeatherByCoords(lat, lon) {
 async function fetchJSON(url) {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    let message = `HTTP ${response.status}: ${response.statusText}`;
+    try {
+      const data = await response.json();
+      if (data?.error) {
+        message = data.error;
+      }
+    } catch (_) {
+      // Keep default message when body is not JSON.
+    }
+    throw new Error(message);
   }
   return response.json();
 }

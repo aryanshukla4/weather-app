@@ -23,11 +23,12 @@ import sqlite3          # built into Python — no pip install needed
 import json             # for storing list/dict fields as JSON strings
 import re               # regular expressions for User-Agent parsing
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 # ── Database file location ─────────────────────────────────────
-DB_PATH = Path("visitors.db")
+DB_PATH = Path(os.getenv("VISITORS_DB_PATH", "visitors.db"))
 # This creates visitors.db in your project root folder.
 # Path() is better than a plain string — works on Windows & Linux.
 
@@ -157,6 +158,7 @@ def get_connection() -> sqlite3.Connection:
     check_same_thread=False is needed for Flask because Flask
     can serve requests from multiple threads.
     """
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     # row_factory = sqlite3.Row makes results accessible like dicts:

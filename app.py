@@ -7,8 +7,11 @@
 # ============================================================
 
 import os                          # lets us read environment variables (like API keys)
+import base64
+import hmac
 import requests                    # lets Python make HTTP calls to external APIs
 from flask import Flask, render_template, jsonify, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 # Flask       → creates the web application
 # render_template → serves HTML files from the /templates folder
 # jsonify         → converts Python dicts into JSON responses for the browser
@@ -40,6 +43,9 @@ app = Flask(__name__)
 app.config.from_object(Config)
 # Load all settings from config.py into the Flask app
 
+# Trust Render's proxy headers so Flask gets real client IP + HTTPS scheme.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
 # ── Initialize Security (must happen right after app creation) ──
 init_security(app)
 # This single call sets up:
@@ -54,9 +60,72 @@ limiter = create_limiter(app)
 
 # ── Initialize Database ────────────────────────────────────────
 init_db()
-# Creates visitors.db and the tables inside it on first run.
-# Safe to call every startup — uses "IF NOT EXISTS" so no data loss.
 
+
+def get_client_ip() -> str:
+    """Best-effort client IP with proxy support."""
+    if request.access_route:
+        return request.access_route[0]
+    return request.remote_addr or ""
+
+
+def build_api_response(payload: dict):
+    """Map service payloads to consistent HTTP responses."""
+    if not payload.get("error"):
+        return jsonify(payload), 200
+
+    msg = str(payload["error"]).lower()
+    if "not found" in msg:
+        status = 404
+    elif "invalid api key" in msg or "unauthorized" in msg:
+        status = 500
+    elif "timed out" in msg or "unreachable" in msg:
+        status = 503
+    else:
+        status = 502
+
+    return jsonify(payload), status
+
+
+def _extract_basic_auth_credentials() -> tuple[str, str]:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Basic "):
+        return "", ""
+
+    token = auth_header[6:].strip()
+    try:
+        decoded = base64.b64decode(token).decode("utf-8")
+    except Exception:
+        return "", ""
+
+    if ":" not in decoded:
+        return "", ""
+
+    username, password = decoded.split(":", 1)
+    return username, password
+
+
+def require_admin_auth():
+    """
+    HTTP Basic auth guard for /admin/visitors.
+    Env vars: ADMIN_USERNAME (optional), ADMIN_PASSWORD (required to enable auth).
+    """
+    admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
+    if not admin_password:
+        return None
+
+    admin_username = os.getenv("ADMIN_USERNAME", "admin").strip() or "admin"
+    submitted_user, submitted_password = _extract_basic_auth_credentials()
+
+    valid_user = hmac.compare_digest(submitted_user, admin_username)
+    valid_pass = hmac.compare_digest(submitted_password, admin_password)
+    if valid_user and valid_pass:
+        return None
+
+    response = jsonify({"error": "Unauthorized"})
+    response.status_code = 401
+    response.headers["WWW-Authenticate"] = 'Basic realm="Admin Dashboard"'
+    return response
 
 # ══════════════════════════════════════════════════════════════
 #  ROUTE 1 — Serve the main HTML page
@@ -103,7 +172,7 @@ def get_weather():
     weather_data = fetch_weather_by_city(city)
     if not weather_data.get("error"):
         log_search(city)   # record this search in the database
-    return jsonify(weather_data)
+    return build_api_response(weather_data)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -133,7 +202,7 @@ def get_weather_by_coords():
         return jsonify({"error": error_message}), 400
 
     weather_data = fetch_weather_by_coords(lat, lon)
-    return jsonify(weather_data)
+    return build_api_response(weather_data)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -157,12 +226,16 @@ def get_forecast():
     city = sanitize_city(city)
 
     forecast_data = fetch_forecast(city)
-    return jsonify(forecast_data)
+    return build_api_response(forecast_data)
 
 
 # ══════════════════════════════════════════════════════════════
 #  HELPER FUNCTIONS — The actual API calls to OpenWeatherMap
 # ══════════════════════════════════════════════════════════════
+
+def get_openweather_api_key() -> str:
+    return app.config.get("OPENWEATHER_API_KEY", "").strip()
+
 
 def fetch_weather_by_city(city: str) -> dict:
     """
@@ -172,7 +245,9 @@ def fetch_weather_by_city(city: str) -> dict:
     they tell other developers what goes in and what comes out.
     """
 
-    api_key = app.config["OPENWEATHER_API_KEY"]
+    api_key = get_openweather_api_key()
+    if not api_key:
+        return {"error": "Server is missing OPENWEATHER_API_KEY."}
     # Read API key from our config (which reads from .env)
 
     url = "https://api.openweathermap.org/data/2.5/weather"
@@ -186,7 +261,7 @@ def fetch_weather_by_city(city: str) -> dict:
     }
 
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, timeout=app.config.get("REQUEST_TIMEOUT", 10))
         # timeout=10 → if the API doesn't respond in 10 seconds, stop waiting
 
         if response.status_code == 404:
@@ -218,7 +293,9 @@ def fetch_weather_by_coords(lat: float, lon: float) -> dict:
     Useful for the "Use My Location" browser feature.
     """
 
-    api_key = app.config["OPENWEATHER_API_KEY"]
+    api_key = get_openweather_api_key()
+    if not api_key:
+        return {"error": "Server is missing OPENWEATHER_API_KEY."}
     url = "https://api.openweathermap.org/data/2.5/weather"
 
     params = {
@@ -230,11 +307,17 @@ def fetch_weather_by_coords(lat: float, lon: float) -> dict:
     }
 
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, timeout=app.config.get("REQUEST_TIMEOUT", 10))
+        if response.status_code == 401:
+            return {"error": "Invalid API key. Check your environment variables."}
         response.raise_for_status()
         return parse_weather(response.json())
+    except requests.exceptions.ConnectionError:
+        return {"error": "No internet connection or API unreachable."}
+    except requests.exceptions.Timeout:
+        return {"error": "Request timed out. Try again."}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Unexpected error: {str(e)}"}
 
 
 def fetch_forecast(city: str) -> dict:
@@ -244,7 +327,9 @@ def fetch_forecast(city: str) -> dict:
     We'll process them into daily summaries on the frontend.
     """
 
-    api_key = app.config["OPENWEATHER_API_KEY"]
+    api_key = get_openweather_api_key()
+    if not api_key:
+        return {"error": "Server is missing OPENWEATHER_API_KEY."}
     url = "https://api.openweathermap.org/data/2.5/forecast"
 
     params = {
@@ -255,7 +340,7 @@ def fetch_forecast(city: str) -> dict:
     }
 
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, timeout=app.config.get("REQUEST_TIMEOUT", 10))
 
         if response.status_code == 404:
             return {"error": f"City '{city}' not found."}
@@ -266,8 +351,12 @@ def fetch_forecast(city: str) -> dict:
         # Process the raw 3-hourly list into daily summaries
         return parse_forecast(data)
 
+    except requests.exceptions.ConnectionError:
+        return {"error": "No internet connection or API unreachable."}
+    except requests.exceptions.Timeout:
+        return {"error": "Request timed out. Try again."}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Unexpected error: {str(e)}"}
 
 
 # ══════════════════════════════════════════════════════════════
@@ -363,15 +452,7 @@ def track():
         # silent=True means: if the body isn't valid JSON, return None
         # instead of throwing an error. We handle None with "or {}"
 
-        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-        # X-Forwarded-For is set by reverse proxies (Render, Cloudflare, Nginx).
-        # It contains the REAL visitor IP even behind a load balancer.
-        # Falls back to remote_addr for direct connections (local dev).
-
-        if ip and "," in ip:
-            ip = ip.split(",")[0].strip()
-        # X-Forwarded-For can contain a chain: "1.2.3.4, 5.6.7.8"
-        # The first IP is always the original visitor. We take just that.
+        ip = get_client_ip()
 
         visitor_id = save_visitor(data, ip)
         return jsonify({"ok": True, "id": visitor_id})
@@ -392,9 +473,7 @@ def log_search(city: str):
     Not a route itself — just a function called by the weather route.
     """
     try:
-        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-        if ip and "," in ip:
-            ip = ip.split(",")[0].strip()
+        ip = get_client_ip()
         save_search(ip=ip, city=city)
     except Exception:
         pass  # Never break weather search because of tracking failure
@@ -413,15 +492,13 @@ def admin_visitors():
     using the stats dict we pass to it.
 
     Access locally:  http://localhost:5000/admin/visitors
-    With password:   http://yoursite.com/admin/visitors?password=yourpass
+    In production: use HTTP Basic auth with ADMIN_USERNAME/ADMIN_PASSWORD.
     """
 
     # ── Password protection ───────────────────────────────────
-    admin_password = os.getenv("ADMIN_PASSWORD", "")
-    if admin_password:
-        submitted = request.args.get("password", "")
-        if submitted != admin_password:
-            return jsonify({"error": "Unauthorized. Add ?password=yourpassword to the URL."}), 401
+    auth_error = require_admin_auth()
+    if auth_error:
+        return auth_error
 
     # Fetch all analytics data from tracker.py
     stats = get_visitor_stats()
@@ -449,3 +526,4 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=port, debug=debug)
     # host="0.0.0.0" means "accept connections from any network interface"
     # This is required when running inside Docker or on a server.
+

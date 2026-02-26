@@ -337,8 +337,12 @@ def validate_city(city: str) -> tuple[bool, str]:
         if pattern.lower() in city_lower:
             return False, "Invalid characters in city name."
 
-    # Check against allowed character pattern
-    if not VALID_CITY_PATTERN.match(city):
+    # Unicode-safe validation:
+    # Allow letters from any language, whitespace, and common city punctuation.
+    allowed_punct = {" ", "-", "'", ",", "."}
+    for ch in city:
+        if ch.isalpha() or ch.isspace() or ch in allowed_punct:
+            continue
         return False, "City name contains invalid characters."
 
     return True, ""
@@ -486,7 +490,6 @@ SUSPICIOUS_PATHS = [
     "/wp-admin",       # WordPress admin (we're not WordPress)
     "/wp-login.php",
     "/.env",           # trying to steal our secrets file
-    "/admin",
     "/phpmyadmin",     # PHP database admin tool
     "/.git/config",    # trying to steal our git config
     "/etc/passwd",     # Linux password file
@@ -495,7 +498,7 @@ SUSPICIOUS_PATHS = [
     "/.htaccess",
 ]
 
-BURST_LIMIT = 10       # max requests per second before blocking
+BURST_LIMIT = 30       # max requests per second before blocking
 BLOCK_DURATION = 300   # block duration in seconds (5 minutes)
 
 
