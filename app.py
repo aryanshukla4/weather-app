@@ -24,6 +24,11 @@ from config import Config          # our own config file (see config.py)
 # validate_city / validate_coordinates check user input
 from security import init_security, create_limiter, validate_city, validate_coordinates, sanitize_city
 
+# ── Visitor Tracker ────────────────────────────────────────────
+# Imports our SQLite-based tracking system.
+# init_db() creates the database file and tables on first run.
+from tracker import init_db, save_visitor, save_search, get_visitor_stats
+
 # ── Load environment variables from .env ──────────────────────
 load_dotenv()
 # This reads .env and makes its values accessible via os.getenv()
@@ -46,6 +51,11 @@ init_security(app)
 # ── Initialize Rate Limiter ────────────────────────────────────
 limiter = create_limiter(app)
 # Now we can use @limiter.limit("30/minute") on any route
+
+# ── Initialize Database ────────────────────────────────────────
+init_db()
+# Creates visitors.db and the tables inside it on first run.
+# Safe to call every startup — uses "IF NOT EXISTS" so no data loss.
 
 
 # ══════════════════════════════════════════════════════════════
@@ -91,6 +101,8 @@ def get_weather():
     # sanitize_city cleans up extra spaces and limits length
 
     weather_data = fetch_weather_by_city(city)
+    if not weather_data.get("error"):
+        log_search(city)   # record this search in the database
     return jsonify(weather_data)
 
 
@@ -330,6 +342,94 @@ def parse_forecast(data: dict) -> dict:
         })
 
     return {"forecast": result, "city": data["city"]["name"]}
+
+
+
+# ══════════════════════════════════════════════════════════════
+#  ROUTE 5 — Receive visitor tracking data from browser
+# ══════════════════════════════════════════════════════════════
+@app.route("/api/track", methods=["POST"])
+@limiter.limit("10/minute")
+# POST method because the browser is SENDING data to us.
+# 10/min limit — one visitor shouldn't fire this more than once anyway.
+def track():
+    """
+    Receives visitor data sent silently by app.js on page load.
+    Saves it to the SQLite database via tracker.py.
+    Returns a simple OK — the browser doesn't use the response.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        # silent=True means: if the body isn't valid JSON, return None
+        # instead of throwing an error. We handle None with "or {}"
+
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        # X-Forwarded-For is set by reverse proxies (Render, Cloudflare, Nginx).
+        # It contains the REAL visitor IP even behind a load balancer.
+        # Falls back to remote_addr for direct connections (local dev).
+
+        if ip and "," in ip:
+            ip = ip.split(",")[0].strip()
+        # X-Forwarded-For can contain a chain: "1.2.3.4, 5.6.7.8"
+        # The first IP is always the original visitor. We take just that.
+
+        visitor_id = save_visitor(data, ip)
+        return jsonify({"ok": True, "id": visitor_id})
+
+    except Exception as e:
+        app.logger.error(f"Track error: {e}")
+        return jsonify({"ok": False}), 200
+        # Return 200 even on error so the browser doesn't retry or show warnings.
+        # Tracking failure should NEVER affect the user's experience.
+
+
+# ══════════════════════════════════════════════════════════════
+#  ROUTE 6 — Log a city search (called from weather route)
+# ══════════════════════════════════════════════════════════════
+def log_search(city: str):
+    """
+    Helper called inside get_weather() to record every city searched.
+    Not a route itself — just a function called by the weather route.
+    """
+    try:
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        if ip and "," in ip:
+            ip = ip.split(",")[0].strip()
+        save_search(ip=ip, city=city)
+    except Exception:
+        pass  # Never break weather search because of tracking failure
+
+
+# ══════════════════════════════════════════════════════════════
+#  ROUTE 7 — Admin dashboard to view all visitor data
+# ══════════════════════════════════════════════════════════════
+@app.route("/admin/visitors")
+def admin_visitors():
+    """
+    Renders the admin analytics dashboard.
+
+    All the HTML lives in templates/admin.html — not here.
+    render_template() loads that file and fills in the {{ variables }}
+    using the stats dict we pass to it.
+
+    Access locally:  http://localhost:5000/admin/visitors
+    With password:   http://yoursite.com/admin/visitors?password=yourpass
+    """
+
+    # ── Password protection ───────────────────────────────────
+    admin_password = os.getenv("ADMIN_PASSWORD", "")
+    if admin_password:
+        submitted = request.args.get("password", "")
+        if submitted != admin_password:
+            return jsonify({"error": "Unauthorized. Add ?password=yourpassword to the URL."}), 401
+
+    # Fetch all analytics data from tracker.py
+    stats = get_visitor_stats()
+
+    # render_template() finds templates/admin.html and passes stats to it.
+    # Inside admin.html, {{ stats.total }}, {{ stats.countries }} etc.
+    # get replaced with the real values from this dict.
+    return render_template("admin.html", stats=stats)
 
 
 # ══════════════════════════════════════════════════════════════

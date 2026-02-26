@@ -1,0 +1,360 @@
+{#
+  templates/admin.html
+  ═══════════════════════════════════════════════════════════
+  Admin dashboard for visitor analytics.
+
+  This is a Jinja2 template — Flask's built-in templating engine.
+  Jinja2 lets you write HTML with special tags that get filled
+  in by Python before the page is sent to the browser.
+
+  Jinja2 syntax:
+    {{ variable }}          → prints a variable's value
+    {% if condition %}      → if statement
+    {% for item in list %}  → loop
+    {{ value | default("-") }} → filter: show "-" if value is None
+
+  Flask automatically looks for templates in the /templates folder.
+  The route in app.py calls render_template("admin.html", stats=stats)
+  which passes the stats dict to this file as a variable called "stats".
+  ═══════════════════════════════════════════════════════════
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nimbus — Visitor Analytics</title>
+  <style>
+    /* ── Reset ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Base ───────────────────────────────────────────────── */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0a0f1e;
+      color: #e0e8ff;
+      padding: 32px 24px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .page-header { margin-bottom: 36px; }
+    .page-header h1 {
+      font-size: 1.7rem;
+      color: #4fd1c5;
+      margin-bottom: 4px;
+      letter-spacing: -0.5px;
+    }
+    .page-header p { color: #6a80a8; font-size: 0.9rem; }
+
+    /* ── Summary stat boxes ─────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .stat-box {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-num { font-size: 2.4rem; font-weight: 700; color: #4fd1c5; }
+    .stat-lbl {
+      font-size: 0.75rem;
+      color: #6a80a8;
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── Section headings ───────────────────────────────────── */
+    .section { margin-bottom: 36px; }
+    .section h2 {
+      font-size: 0.8rem;
+      color: #8ca0c8;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+
+    /* ── 3-column mini grid for top-lists ───────────────────── */
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      margin-bottom: 36px;
+    }
+
+    /* ── List items (countries, browsers, devices) ──────────── */
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.9rem;
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-count { color: #4fd1c5; font-weight: 600; }
+
+    /* ── Table ──────────────────────────────────────────────── */
+    .table-wrapper { overflow-x: auto; }
+    /* overflow-x: auto adds horizontal scroll on small screens
+       so the table never breaks the page layout */
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      white-space: nowrap;
+      /* white-space: nowrap prevents cells from wrapping to multiple lines */
+    }
+    thead th {
+      background: rgba(255,255,255,0.05);
+      padding: 10px 14px;
+      text-align: left;
+      color: #6a80a8;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+    }
+    tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: #c8d8f0;
+    }
+    tbody tr:hover td { background: rgba(255,255,255,0.03); }
+
+    /* ── Badges ─────────────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      background: rgba(79,209,197,0.15);
+      color: #4fd1c5;
+      padding: 2px 9px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .badge-mobile {
+      background: rgba(246,166,35,0.15);
+      color: #f6a623;
+    }
+    .badge-tablet {
+      background: rgba(160,120,255,0.15);
+      color: #a878ff;
+    }
+    .badge-gps {
+      background: rgba(79,209,197,0.15);
+      color: #4fd1c5;
+    }
+
+    /* ── Empty state ────────────────────────────────────────── */
+    .empty { color: #4a5a80; padding: 20px 0; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+  {# ── Page Header ─────────────────────────────────────────── #}
+  <div class="page-header">
+    <h1>◈ Nimbus — Visitor Analytics</h1>
+    <p>Live data from visitors.db &middot; {{ stats.total }} total visits recorded</p>
+    {# &middot; is the HTML entity for the · dot character #}
+  </div>
+
+  {# ── Summary Stat Boxes ───────────────────────────────────── #}
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="stat-num">{{ stats.total }}</div>
+      <div class="stat-lbl">Total Visitors</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">{{ stats.today }}</div>
+      <div class="stat-lbl">Today</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">{{ stats.gps_rate }}%</div>
+      <div class="stat-lbl">GPS Allowed</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">{{ stats.gps_granted }}</div>
+      <div class="stat-lbl">With GPS Coords</div>
+    </div>
+  </div>
+
+  {# ── Top Lists: Countries / Browsers / Devices ────────────── #}
+  <div class="mini-grid">
+
+    <div class="section">
+      <h2>Top Countries</h2>
+      {% if stats.countries %}
+        {% for row in stats.countries %}
+          {# row is a dict: { "ip_country": "India", "count": 42 } #}
+          <div class="list-item">
+            <span>{{ row.ip_country or "Unknown" }}</span>
+            <span class="list-count">{{ row.count }}</span>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="empty">No data yet</p>
+      {% endif %}
+    </div>
+
+    <div class="section">
+      <h2>Top Browsers</h2>
+      {% if stats.browsers %}
+        {% for row in stats.browsers %}
+          <div class="list-item">
+            <span>{{ row.browser_name or "Unknown" }}</span>
+            <span class="list-count">{{ row.count }}</span>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="empty">No data yet</p>
+      {% endif %}
+    </div>
+
+    <div class="section">
+      <h2>Device Types</h2>
+      {% if stats.devices %}
+        {% for row in stats.devices %}
+          <div class="list-item">
+            <span>{{ row.device_type | capitalize or "Unknown" }}</span>
+            {# | capitalize is a Jinja2 filter: "mobile" → "Mobile" #}
+            <span class="list-count">{{ row.count }}</span>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="empty">No data yet</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {# ── Top Searched Cities ───────────────────────────────────── #}
+  <div class="section">
+    <h2>Most Searched Cities</h2>
+    {% if stats.top_searches %}
+      {% for row in stats.top_searches %}
+        <div class="list-item">
+          <span>{{ row.city_query }}</span>
+          <span class="list-count">{{ row.count }} searches</span>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="empty">No searches recorded yet</p>
+    {% endif %}
+  </div>
+
+  {# ── Recent Visitors Table ────────────────────────────────── #}
+  <div class="section">
+    <h2>Recent Visitors (last 20)</h2>
+
+    {% if stats.recent %}
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Time (UTC)</th>
+              <th>IP Address</th>
+              <th>Location (from IP)</th>
+              <th>Browser</th>
+              <th>OS</th>
+              <th>Device</th>
+              <th>Timezone</th>
+              <th>Screen</th>
+              <th>GPS Allowed</th>
+              <th>GPS Coords</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in stats.recent %}
+              {# Each r is one row from the visitors table #}
+              <tr>
+
+                {# Visit time — slice to first 19 chars to drop microseconds #}
+                <td>{{ r.visit_time[:19] if r.visit_time else "-" }}</td>
+
+                {# IP address #}
+                <td>{{ r.ip_address or "-" }}</td>
+
+                {# City + Country combined. If no city, just show country. #}
+                <td>
+                  {% if r.ip_city %}
+                    {{ r.ip_city }}, {{ r.ip_country }}
+                  {% elif r.ip_country %}
+                    {{ r.ip_country }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+
+                {# Browser name #}
+                <td>{{ r.browser_name or "-" }}</td>
+
+                {# OS name #}
+                <td>{{ r.os_name or "-" }}</td>
+
+                {# Device type with colored badge #}
+                <td>
+                  {% if r.device_type == "mobile" %}
+                    <span class="badge badge-mobile">mobile</span>
+                  {% elif r.device_type == "tablet" %}
+                    <span class="badge badge-tablet">tablet</span>
+                  {% elif r.device_type %}
+                    <span class="badge">{{ r.device_type }}</span>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+
+                {# Timezone e.g. "Asia/Kolkata" #}
+                <td>{{ r.timezone or "-" }}</td>
+
+                {# Screen resolution e.g. "1920 x 1080" #}
+                <td>
+                  {% if r.screen_width %}
+                    {{ r.screen_width }} × {{ r.screen_height }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+
+                {# GPS allowed? Green badge if yes, plain "no" if not #}
+                <td>
+                  {% if r.location_granted %}
+                    <span class="badge badge-gps">yes</span>
+                  {% else %}
+                    no
+                  {% endif %}
+                </td>
+
+                {# GPS coordinates — only show if we have them #}
+                <td>
+                  {% if r.lat %}
+                    {{ "%.4f"|format(r.lat) }}, {{ "%.4f"|format(r.lon) }}
+                    {# "%.4f"|format() is a Jinja2 filter that rounds to 4 decimal places #}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    {% else %}
+      <p class="empty">No visitors recorded yet. Visit the homepage first!</p>
+    {% endif %}
+
+  </div>
+
+</body>
+</html>
