@@ -37,3 +37,5 @@ flask-limiter==3.8.0
 
 # celery==5.4.0
 # Background tasks (weather alert emails, scheduled forecasts).
+psycopg[binary]==3.2.9
+

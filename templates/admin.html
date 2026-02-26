@@ -260,7 +260,7 @@
         <table>
           <thead>
             <tr>
-              <th>Time (UTC)</th>
+              <th>Time (IST)</th>
               <th>IP Address</th>
               <th>Location (from IP)</th>
               <th>Browser</th>
@@ -278,7 +278,7 @@
               <tr>
 
                 {# Visit time — slice to first 19 chars to drop microseconds #}
-                <td>{{ r.visit_time[:19] if r.visit_time else "-" }}</td>
+                <td>{{ r.visit_time_ist or "-" }}</td>
 
                 {# IP address #}
                 <td>{{ r.ip_address or "-" }}</td>

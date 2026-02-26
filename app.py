@@ -9,6 +9,8 @@
 import os                          # lets us read environment variables (like API keys)
 import base64
 import hmac
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import requests                    # lets Python make HTTP calls to external APIs
 from flask import Flask, render_template, jsonify, request
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -126,6 +128,19 @@ def require_admin_auth():
     response.status_code = 401
     response.headers["WWW-Authenticate"] = 'Basic realm="Admin Dashboard"'
     return response
+
+
+def to_ist_timestamp(value: str) -> str:
+    """Convert ISO timestamp to IST display format."""
+    if not value:
+        return "-"
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return value[:19]
 
 # ══════════════════════════════════════════════════════════════
 #  ROUTE 1 — Serve the main HTML page
@@ -502,6 +517,8 @@ def admin_visitors():
 
     # Fetch all analytics data from tracker.py
     stats = get_visitor_stats()
+    for row in stats.get("recent", []):
+        row["visit_time_ist"] = to_ist_timestamp(row.get("visit_time"))
 
     # render_template() finds templates/admin.html and passes stats to it.
     # Inside admin.html, {{ stats.total }}, {{ stats.countries }} etc.
