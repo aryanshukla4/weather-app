@@ -1,11 +1,12 @@
-// ============================================================
+﻿// ============================================================
 // static/js/app.js
 // ============================================================
 
-// ── DOM References ────────────────────────────────────────────
+// â”€â”€ DOM References â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const cityInput       = document.getElementById("cityInput");
 const searchBtn       = document.getElementById("searchBtn");
 const locationBtn     = document.getElementById("locationBtn");
+const locationCta     = document.getElementById("locationCta");
 const errorMsg        = document.getElementById("errorMsg");
 const errorText       = document.getElementById("errorText");
 const loadingSpinner  = document.getElementById("loadingSpinner");
@@ -33,15 +34,73 @@ const sunPosition     = document.getElementById("sunPosition");
 
 const forecastGrid    = document.getElementById("forecastGrid");
 const cityChips       = document.querySelectorAll(".city-chip");
+const feedbackModal   = document.getElementById("feedbackModal");
+const feedbackClose   = document.getElementById("feedbackClose");
+const feedbackForm    = document.getElementById("feedbackForm");
+const feedbackNext    = document.getElementById("feedbackNext");
+const feedbackBack    = document.getElementById("feedbackBack");
+const feedbackStatus  = document.getElementById("feedbackStatus");
+const feedbackSteps   = document.querySelectorAll(".feedback-step");
+const ratingInputs    = document.querySelectorAll('input[name="rating"]');
+const FEEDBACK_SHOWN_KEY = "nimbus-feedback-shown";
+const LOCATION_CTA_CLICKED_KEY = "nimbus-location-cta-clicked";
+const FEEDBACK_PROMPT_DELAY_MS = 2000;
+let feedbackPromptTimer = null;
+const ICON_BASE_URL = "https://openweathermap.org/img/wn/";
+const iconUrlCache = new Map();
+
+initRuntimePerformanceMode();
+primeStaticAssets();
+
+function initRuntimePerformanceMode() {
+  const root = document.documentElement;
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+
+  const reducedMotion =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const cores = Number(navigator.hardwareConcurrency || 0);
+  const memory = Number(navigator.deviceMemory || 0);
+
+  const lowCores = cores > 0 && cores <= 4;
+  const lowMemory = memory > 0 && memory <= 4;
+  const saveData = Boolean(connection && connection.saveData);
+  const slowConnection = Boolean(connection && String(connection.effectiveType || "").includes("2g"));
+
+  if (reducedMotion) {
+    root.classList.add("reduce-motion");
+  }
+
+  if (reducedMotion || lowCores || lowMemory || saveData || slowConnection) {
+    root.classList.add("perf-lite");
+  }
+}
+
+function primeStaticAssets() {
+  if (!weatherIcon) return;
+  weatherIcon.decoding = "async";
+  weatherIcon.loading = "eager";
+  weatherIcon.setAttribute("fetchpriority", "high");
+}
+
+function getWeatherIconUrl(iconCode) {
+  const code = String(iconCode || "").trim();
+  if (!code) return "";
+  if (!iconUrlCache.has(code)) {
+    iconUrlCache.set(code, `${ICON_BASE_URL}${code}@2x.png`);
+  }
+  return iconUrlCache.get(code);
+}
 
 
-// ══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  VISITOR TRACKING
 //  Runs on page load. Collects everything the browser exposes
 //  about the visitor and sends it to our Python backend.
 //  Location coords are only collected if the user clicks
 //  "Use My Location" and grants permission.
-// ══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Collects all available browser/device info and sends it to
@@ -56,7 +115,7 @@ async function trackVisitor(extras = {}) {
     // screen    = display info (resolution, color depth)
 
     const data = {
-      // ── Browser & Device ───────────────────────────────────
+      // â”€â”€ Browser & Device â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       user_agent:        navigator.userAgent,
       // Full browser string e.g.
       // "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/125..."
@@ -70,7 +129,7 @@ async function trackVisitor(extras = {}) {
       platform:          navigator.platform,
       // e.g. "Win32", "MacIntel", "Linux x86_64"
 
-      // ── Screen ─────────────────────────────────────────────
+      // â”€â”€ Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       screen_width:      screen.width,
       screen_height:     screen.height,
       // Physical screen resolution e.g. 1920 x 1080
@@ -80,12 +139,12 @@ async function trackVisitor(extras = {}) {
       // Browser window size (smaller than screen if windowed)
 
       color_depth:       screen.colorDepth,
-      // Bits per pixel — 24 or 32 for modern displays
+      // Bits per pixel â€” 24 or 32 for modern displays
 
       pixel_ratio:       window.devicePixelRatio,
       // 1 = normal, 2 = retina/HiDPI display
 
-      // ── Time & Location ────────────────────────────────────
+      // â”€â”€ Time & Location â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       timezone:          Intl.DateTimeFormat().resolvedOptions().timeZone,
       // e.g. "Asia/Kolkata", "America/New_York"
 
@@ -95,24 +154,24 @@ async function trackVisitor(extras = {}) {
       local_time:        new Date().toISOString(),
       // e.g. "2025-07-15T14:32:01.000Z"
 
-      // ── Page info ──────────────────────────────────────────
+      // â”€â”€ Page info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       page_url:          window.location.href,
       referrer:          document.referrer || "direct",
       // referrer = the URL they came from. Empty = typed directly.
 
-      // ── Connection ─────────────────────────────────────────
+      // â”€â”€ Connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // navigator.connection is not available in all browsers
       connection_type:   navigator.connection?.effectiveType || "unknown",
       // e.g. "4g", "3g", "2g", "slow-2g"
 
-      // ── Touch support ──────────────────────────────────────
+      // â”€â”€ Touch support â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       is_touch_device:   ("ontouchstart" in window) || navigator.maxTouchPoints > 0,
       // true = phone/tablet, false = desktop
 
-      // ── Cookies & Storage ──────────────────────────────────
+      // â”€â”€ Cookies & Storage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       cookies_enabled:   navigator.cookieEnabled,
 
-      // ── Location (GPS) — only if extras provides it ────────
+      // â”€â”€ Location (GPS) â€” only if extras provides it â”€â”€â”€â”€â”€â”€â”€â”€
       location_granted:  false,   // default, overridden if user allows
       lat:               null,
       lon:               null,
@@ -128,19 +187,19 @@ async function trackVisitor(extras = {}) {
       headers: { "Content-Type": "application/json" },
       // Content-Type tells the server: "the body is JSON, not a form"
       body:    JSON.stringify(data),
-      // JSON.stringify converts JavaScript object → JSON string
+      // JSON.stringify converts JavaScript object â†’ JSON string
     });
 
     // We don't await a response or show anything to the user.
     // Tracking is completely silent in the background.
 
   } catch (err) {
-    // If tracking fails, silently ignore — never break the main app
+    // If tracking fails, silently ignore â€” never break the main app
     console.debug("Tracking skipped:", err.message);
   }
 }
 
-// ── Fire tracking on page load ────────────────────────────────
+// â”€â”€ Fire tracking on page load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Runs immediately when the page opens, before the user does anything.
 // Uses requestIdleCallback so it runs when browser is idle (not busy rendering).
 // Falls back to setTimeout if requestIdleCallback isn't supported.
@@ -151,9 +210,9 @@ if (typeof requestIdleCallback !== "undefined") {
 }
 
 
-// ══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  EVENT LISTENERS
-// ══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 searchBtn.addEventListener("click", () => {
   const city = cityInput.value.trim();
@@ -177,7 +236,7 @@ locationBtn.addEventListener("click", () => {
   showLoading();
 
   navigator.geolocation.getCurrentPosition(
-    // ── SUCCESS: user allowed location ─────────────────────
+    // â”€â”€ SUCCESS: user allowed location â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     (position) => {
       const { latitude, longitude } = position.coords;
 
@@ -194,7 +253,7 @@ locationBtn.addEventListener("click", () => {
       fetchWeatherByCoords(latitude, longitude);
     },
 
-    // ── ERROR: user denied or location unavailable ──────────
+    // â”€â”€ ERROR: user denied or location unavailable â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     (err) => {
       hideLoading();
       // Track that location was denied (useful analytics)
@@ -202,7 +261,7 @@ locationBtn.addEventListener("click", () => {
       showError("Location access denied. Please search manually.");
     },
 
-    // ── Options ─────────────────────────────────────────────
+    // â”€â”€ Options â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
       timeout:            10000,   // wait max 10 seconds for GPS
       maximumAge:         60000,   // accept cached location up to 1 min old
@@ -220,10 +279,13 @@ cityChips.forEach((chip) => {
   });
 });
 
+setupFeedbackHandlers();
+setupLocationCtaNudge();
 
-// ══════════════════════════════════════════════════════════════
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  CORE FUNCTIONS
-// ══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function searchCity(city) {
   showLoading();
@@ -243,6 +305,7 @@ async function searchCity(city) {
     renderWeather(weatherData);
     renderForecast(forecastData);
     showResults();
+    maybeShowFeedbackPrompt();
 
   } catch (err) {
     showError("Could not connect to the server. Check your connection.");
@@ -255,12 +318,12 @@ async function searchCity(city) {
 
 /**
  * BUG FIX: Previously this did Promise.all with an empty-city forecast
- * call at the same time as the coords call — the empty city failed
+ * call at the same time as the coords call â€” the empty city failed
  * validation and crashed everything.
  *
  * FIX: Fetch weather by coords FIRST. Once we have the city name
  * from that response, THEN fetch the forecast using the real city name.
- * Sequential, not parallel — correct order guaranteed.
+ * Sequential, not parallel â€” correct order guaranteed.
  */
 async function fetchWeatherByCoords(lat, lon) {
   try {
@@ -274,6 +337,7 @@ async function fetchWeatherByCoords(lat, lon) {
 
     renderWeather(weatherData);
     showResults();
+    maybeShowFeedbackPrompt();
 
     cityInput.value = weatherData.city;
     // Fill in the search box so user sees what city was detected
@@ -314,20 +378,27 @@ async function fetchJSON(url) {
 }
 
 
-// ══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  RENDER FUNCTIONS
-// ══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function renderWeather(data) {
   cityName.textContent     = data.city;
   countryBadge.textContent = data.country;
   currentTemp.textContent  = data.temp;
-  feelsLike.textContent    = `Feels like ${data.feels_like}°`;
-  tempRange.textContent    = `H:${data.temp_max}° · L:${data.temp_min}°`;
+  feelsLike.textContent    = `Feels like ${data.feels_like}Â°`;
+  tempRange.textContent    = `H:${data.temp_max}Â° Â· L:${data.temp_min}Â°`;
   weatherDesc.textContent  = data.description;
 
-  weatherIcon.src = `https://openweathermap.org/img/wn/${data.icon}@2x.png`;
-  weatherIcon.alt = data.description;
+  const heroIconUrl = getWeatherIconUrl(data.icon);
+  if (heroIconUrl) {
+    if (weatherIcon.src !== heroIconUrl) {
+      weatherIcon.src = heroIconUrl;
+    }
+  } else {
+    weatherIcon.removeAttribute("src");
+  }
+  weatherIcon.alt = data.description || "weather icon";
 
   humidityEl.textContent   = `${data.humidity}%`;
   windSpeedEl.textContent  = `${data.wind_speed} m/s`;
@@ -335,7 +406,13 @@ function renderWeather(data) {
   visibilityEl.textContent = data.visibility > 0 ? `${data.visibility} km` : "N/A";
   pressureEl.textContent   = `${data.pressure} hPa`;
 
-  setTimeout(() => { humidityBar.style.width = `${data.humidity}%`; }, 300);
+  if (typeof requestAnimationFrame !== "undefined") {
+    requestAnimationFrame(() => {
+      humidityBar.style.width = `${data.humidity}%`;
+    });
+  } else {
+    humidityBar.style.width = `${data.humidity}%`;
+  }
 
   sunriseEl.textContent = formatTime(data.sunrise, data.timezone);
   sunsetEl.textContent  = formatTime(data.sunset, data.timezone);
@@ -346,31 +423,49 @@ function renderWeather(data) {
 
 function renderForecast(data) {
   if (!data.forecast || data.error) return;
-  forecastGrid.innerHTML = "";
+  forecastGrid.textContent = "";
 
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const fragment = document.createDocumentFragment();
 
   data.forecast.forEach((day, index) => {
     const date    = new Date(day.date + "T12:00:00");
     const dayName = index === 0 ? "Today" : days[date.getDay()];
-    const item    = document.createElement("div");
+    const item = document.createElement("div");
     item.className = "forecast-item";
-    item.innerHTML = `
-      <div class="forecast-day">${dayName}</div>
-      <img class="forecast-icon"
-           src="https://openweathermap.org/img/wn/${day.icon}@2x.png"
-           alt="${day.description}" />
-      <div class="forecast-temp-max">${day.temp_max}°</div>
-      <div class="forecast-temp-min">${day.temp_min}°</div>
-    `;
-    forecastGrid.appendChild(item);
+
+    const dayLabel = document.createElement("div");
+    dayLabel.className = "forecast-day";
+    dayLabel.textContent = dayName;
+
+    const icon = document.createElement("img");
+    icon.className = "forecast-icon";
+    icon.src = getWeatherIconUrl(day.icon);
+    icon.alt = day.description || "forecast icon";
+    icon.loading = index < 2 ? "eager" : "lazy";
+    icon.decoding = "async";
+    icon.width = 44;
+    icon.height = 44;
+
+    const maxTemp = document.createElement("div");
+    maxTemp.className = "forecast-temp-max";
+    maxTemp.textContent = `${day.temp_max}\u00B0`;
+
+    const minTemp = document.createElement("div");
+    minTemp.className = "forecast-temp-min";
+    minTemp.textContent = `${day.temp_min}\u00B0`;
+
+    item.append(dayLabel, icon, maxTemp, minTemp);
+    fragment.appendChild(item);
   });
+
+  forecastGrid.appendChild(fragment);
 }
 
 
-// ══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  UTILITY FUNCTIONS
-// ══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function degreesToCompass(deg) {
   const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
@@ -410,7 +505,150 @@ function applyTemperatureTheme(temp) {
   else                 { root.style.setProperty("--bg-deep", "#0d0a14"); }
 }
 
-// ── UI State Helpers ──────────────────────────────────────────
+// â”€â”€ UI State Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function setupLocationCtaNudge() {
+  if (!locationBtn || !locationCta) return;
+  const perfLiteMode = document.documentElement.classList.contains("perf-lite");
+
+  if (!hasUsedLocationCta() && !perfLiteMode) {
+    locationCta.classList.add("location-cta-nudge");
+  }
+
+  locationBtn.addEventListener("click", () => {
+    locationCta.classList.remove("location-cta-nudge");
+    markLocationCtaUsed();
+  });
+}
+
+function hasUsedLocationCta() {
+  try {
+    return localStorage.getItem(LOCATION_CTA_CLICKED_KEY) === "true";
+  } catch (_) {
+    return false;
+  }
+}
+
+function markLocationCtaUsed() {
+  try {
+    localStorage.setItem(LOCATION_CTA_CLICKED_KEY, "true");
+  } catch (_) {
+    // Ignore storage limitations and keep UI functional.
+  }
+}
+
+function setupFeedbackHandlers() {
+  if (!feedbackModal || !feedbackForm || !feedbackClose) return;
+
+  feedbackClose.addEventListener("click", closeFeedbackModal);
+
+  feedbackModal.addEventListener("click", (event) => {
+    if (event.target === feedbackModal) {
+      closeFeedbackModal();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !feedbackModal.classList.contains("hidden")) {
+      closeFeedbackModal();
+    }
+  });
+
+  ratingInputs.forEach((input) => {
+    input.addEventListener("change", () => {
+      if (feedbackNext) feedbackNext.disabled = false;
+    });
+  });
+
+  if (feedbackNext) {
+    feedbackNext.addEventListener("click", () => setFeedbackStep(2));
+  }
+
+  if (feedbackBack) {
+    feedbackBack.addEventListener("click", () => setFeedbackStep(1));
+  }
+
+  feedbackForm.addEventListener("submit", handleFeedbackSubmit);
+}
+
+function maybeShowFeedbackPrompt() {
+  if (!feedbackModal || !feedbackForm) return;
+  if (hasSeenFeedbackPrompt() || feedbackPromptTimer) return;
+
+  feedbackPromptTimer = window.setTimeout(() => {
+    feedbackPromptTimer = null;
+    if (hasSeenFeedbackPrompt()) return;
+
+    markFeedbackPromptSeen();
+    openFeedbackModal();
+  }, FEEDBACK_PROMPT_DELAY_MS);
+}
+
+function hasSeenFeedbackPrompt() {
+  try {
+    return localStorage.getItem(FEEDBACK_SHOWN_KEY) === "true";
+  } catch (_) {
+    return false;
+  }
+}
+
+function markFeedbackPromptSeen() {
+  try {
+    localStorage.setItem(FEEDBACK_SHOWN_KEY, "true");
+  } catch (_) {
+    // Ignore storage limitations and keep UI functional.
+  }
+}
+
+function openFeedbackModal() {
+  resetFeedbackForm();
+  feedbackModal.classList.remove("hidden");
+  document.body.classList.add("feedback-open");
+}
+
+function closeFeedbackModal() {
+  feedbackModal.classList.add("hidden");
+  document.body.classList.remove("feedback-open");
+}
+
+function setFeedbackStep(stepNumber) {
+  feedbackSteps.forEach((step) => {
+    const isCurrentStep = Number(step.dataset.step) === stepNumber;
+    step.classList.toggle("hidden", !isCurrentStep);
+  });
+}
+
+function resetFeedbackForm() {
+  feedbackForm.reset();
+  setFeedbackStep(1);
+  if (feedbackNext) feedbackNext.disabled = true;
+  if (feedbackStatus) feedbackStatus.textContent = "";
+}
+
+async function handleFeedbackSubmit(event) {
+  event.preventDefault();
+
+  const formData = new FormData(feedbackForm);
+  const payload = {
+    rating: Number(formData.get("rating")),
+    location_experience: formData.get("locationExperience"),
+    submitted_at: new Date().toISOString(),
+  };
+
+  console.log("Nimbus feedback submitted:", payload);
+
+  if (feedbackStatus) {
+    feedbackStatus.textContent = "Thanks for the feedback!";
+  }
+
+  await Promise.resolve();
+
+  setTimeout(() => {
+    closeFeedbackModal();
+    resetFeedbackForm();
+  }, 900);
+}
+
 function showLoading() {
   loadingSpinner.classList.remove("hidden");
   weatherResults.classList.add("hidden");
@@ -421,3 +659,4 @@ function hideLoading() { loadingSpinner.classList.add("hidden"); }
 function showResults()  { weatherResults.classList.remove("hidden"); emptyState.classList.add("hidden"); }
 function showError(msg) { errorText.textContent = msg; errorMsg.classList.remove("hidden"); emptyState.classList.add("hidden"); }
 function hideError()    { errorMsg.classList.add("hidden"); }
+

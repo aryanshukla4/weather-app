@@ -32,7 +32,7 @@ from security import init_security, create_limiter, validate_city, validate_coor
 # ── Visitor Tracker ────────────────────────────────────────────
 # Imports our SQLite-based tracking system.
 # init_db() creates the database file and tables on first run.
-from tracker import init_db, save_visitor, save_search, get_visitor_stats
+from tracker import init_db, save_visitor, save_search, get_visitor_stats, get_visitors_page
 
 # ── Load environment variables from .env ──────────────────────
 load_dotenv()
@@ -524,6 +524,42 @@ def admin_visitors():
     # Inside admin.html, {{ stats.total }}, {{ stats.countries }} etc.
     # get replaced with the real values from this dict.
     return render_template("admin.html", stats=stats)
+
+
+@app.route("/api/admin/visitors")
+@limiter.limit("120/minute")
+def admin_visitors_api():
+    """
+    Cursor-based visitors API used by the virtualized admin feed.
+    Query params:
+      - limit (20..200, default 120)
+      - before_id (optional cursor; fetch rows with id < before_id)
+    """
+    auth_error = require_admin_auth()
+    if auth_error:
+        return auth_error
+
+    raw_limit = request.args.get("limit", "120").strip()
+    try:
+        limit = int(raw_limit)
+    except ValueError:
+        return jsonify({"error": "Invalid limit parameter."}), 400
+
+    before_id = None
+    raw_before_id = request.args.get("before_id", "").strip()
+    if raw_before_id:
+        try:
+            before_id = int(raw_before_id)
+        except ValueError:
+            return jsonify({"error": "Invalid before_id parameter."}), 400
+        if before_id <= 0:
+            return jsonify({"error": "before_id must be positive."}), 400
+
+    page = get_visitors_page(limit=limit, before_id=before_id)
+    for row in page.get("items", []):
+        row["visit_time_ist"] = to_ist_timestamp(row.get("visit_time"))
+
+    return jsonify(page), 200
 
 
 # ══════════════════════════════════════════════════════════════

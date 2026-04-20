@@ -82,13 +82,17 @@
       </div>
 
       <!-- "Use My Location" button — triggers browser geolocation -->
-      <button id="locationBtn" class="location-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-          <circle cx="12" cy="12" r="10" stroke-dasharray="3 3"/>
-        </svg>
-        Use my location
-      </button>
+      <div id="locationCta" class="location-cta">
+        <p class="location-badge">Most accurate results</p>
+        <button id="locationBtn" class="location-btn" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+            <circle cx="12" cy="12" r="10" stroke-dasharray="3 3"/>
+          </svg>
+          Use my location
+        </button>
+        <p class="location-tip">Want better precision? Tap this and Nimbus auto-detects your exact city.</p>
+      </div>
     </div>
 
     <!-- ── Error Message ─────────────────────────────────── -->
@@ -227,8 +231,58 @@
     </footer>
 
   </div><!-- end .app-container -->
+  <div id="feedbackModal" class="feedback-modal hidden" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+    <div class="feedback-panel">
+      <button id="feedbackClose" class="feedback-close" type="button" aria-label="Close feedback">&times;</button>
 
-  <!-- Our JavaScript — placed at bottom so HTML loads first -->
+      <form id="feedbackForm" class="feedback-form">
+        <h2 id="feedbackTitle">Quick feedback</h2>
+
+        <div class="feedback-step" data-step="1">
+          <p class="feedback-label">Give Nimbus a quick rating</p>
+
+          <div class="star-rating" role="radiogroup" aria-label="Nimbus rating">
+            <input id="star5" type="radio" name="rating" value="5" required />
+            <label for="star5" aria-label="5 stars">&#9733;</label>
+            <input id="star4" type="radio" name="rating" value="4" />
+            <label for="star4" aria-label="4 stars">&#9733;</label>
+            <input id="star3" type="radio" name="rating" value="3" />
+            <label for="star3" aria-label="3 stars">&#9733;</label>
+            <input id="star2" type="radio" name="rating" value="2" />
+            <label for="star2" aria-label="2 stars">&#9733;</label>
+            <input id="star1" type="radio" name="rating" value="1" />
+            <label for="star1" aria-label="1 star">&#9733;</label>
+          </div>
+
+          <button id="feedbackNext" class="feedback-submit" type="button" disabled>Next</button>
+        </div>
+
+        <div class="feedback-step hidden" data-step="2">
+          <p class="feedback-label">How is current location feature working?</p>
+
+          <div class="feedback-toggle-group" role="radiogroup" aria-label="Location feature quality">
+            <label class="feedback-option">
+              <input type="radio" name="locationExperience" value="Its working good" required />
+              <span>It's working good</span>
+            </label>
+            <label class="feedback-option">
+              <input type="radio" name="locationExperience" value="Its showing wrong weather at my location" />
+              <span>It's showing wrong weather at my location</span>
+            </label>
+          </div>
+
+          <div class="feedback-actions">
+            <button id="feedbackBack" class="feedback-ghost-btn" type="button">Back</button>
+            <button class="feedback-submit" type="submit">Submit</button>
+          </div>
+        </div>
+
+        <p id="feedbackStatus" class="feedback-status" aria-live="polite"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Our JavaScript -->
   <script src="/static/js/app.js"></script>
 
 </body>

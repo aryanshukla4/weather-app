@@ -634,3 +634,90 @@ def get_visitor_stats() -> dict[str, Any]:
         }
     finally:
         conn.close()
+
+
+def get_visitors_page(limit: int = 100, before_id: int | None = None) -> dict[str, Any]:
+    """
+    Cursor-based visitor pagination for virtualized admin feeds.
+
+    `before_id` means "fetch rows with id < before_id", ordered DESC by id.
+    """
+    page_size = max(20, min(int(limit), 200))
+    conn = get_connection()
+    try:
+        if _using_postgres():
+            cur = conn.cursor(row_factory=dict_row)
+            if before_id is None:
+                cur.execute(
+                    """
+                    SELECT id, visit_time, ip_address, ip_city, ip_region, ip_country,
+                           browser_name, os_name, device_type, location_granted, lat, lon,
+                           timezone, screen_width, screen_height
+                    FROM visitors
+                    ORDER BY id DESC
+                    LIMIT %s
+                    """,
+                    (page_size + 1,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id, visit_time, ip_address, ip_city, ip_region, ip_country,
+                           browser_name, os_name, device_type, location_granted, lat, lon,
+                           timezone, screen_width, screen_height
+                    FROM visitors
+                    WHERE id < %s
+                    ORDER BY id DESC
+                    LIMIT %s
+                    """,
+                    (before_id, page_size + 1),
+                )
+            raw_rows = _dict_rows(cur.fetchall())
+
+            cur.execute("SELECT COUNT(*) AS c FROM visitors")
+            total = int(cur.fetchone()["c"])
+        else:
+            if before_id is None:
+                raw_rows = _dict_rows(
+                    conn.execute(
+                        """
+                        SELECT id, visit_time, ip_address, ip_city, ip_region, ip_country,
+                               browser_name, os_name, device_type, location_granted, lat, lon,
+                               timezone, screen_width, screen_height
+                        FROM visitors
+                        ORDER BY id DESC
+                        LIMIT ?
+                        """,
+                        (page_size + 1,),
+                    ).fetchall()
+                )
+            else:
+                raw_rows = _dict_rows(
+                    conn.execute(
+                        """
+                        SELECT id, visit_time, ip_address, ip_city, ip_region, ip_country,
+                               browser_name, os_name, device_type, location_granted, lat, lon,
+                               timezone, screen_width, screen_height
+                        FROM visitors
+                        WHERE id < ?
+                        ORDER BY id DESC
+                        LIMIT ?
+                        """,
+                        (before_id, page_size + 1),
+                    ).fetchall()
+                )
+
+            total = int(conn.execute("SELECT COUNT(*) FROM visitors").fetchone()[0])
+
+        has_more = len(raw_rows) > page_size
+        items = raw_rows[:page_size]
+        next_cursor = int(items[-1]["id"]) if has_more and items else None
+
+        return {
+            "items": items,
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+            "total": total,
+        }
+    finally:
+        conn.close()
